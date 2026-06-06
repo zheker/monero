@@ -1,33 +1,19 @@
-FROM stagex/pallet-gcc-gnu-gnu:sx2026.05.0 AS builder
-COPY --from=stagex/core-curl:sx2026.05.0 . /
-COPY --from=stagex/core-openssl:sx2026.05.0 . /
-COPY --from=stagex/core-ca-certificates:sx2026.05.0 . /
-COPY --from=stagex/user-patch:sx2026.05.0 . /
-COPY --from=stagex/core-cmake:sx2026.05.0 . /
-COPY --from=stagex/core-ncurses:sx2026.05.0 . /
+FROM debian:bookworm-slim AS downloader
 
-ENV TARGET="aarch64-linux-musl"
-WORKDIR /monero
-COPY . .
+RUN apt-get update && apt-get install -y --no-install-recommends curl bzip2 ca-certificates
 
-RUN make -C contrib/depends -j$(nproc) download-linux NO_WALLET=1 NO_READLINE=1
+ARG MONERO_VERSION=v0.18.3.3
+WORKDIR /tmp
 
-RUN make -C contrib/depends -j$(nproc) HOST="${TARGET}" NO_WALLET=1 NO_READLINE=1
+RUN curl -sL -O https://downloads.getmonero.org/cli/monero-linux-armv8-${MONERO_VERSION}.tar.bz2 \
+    && tar -xjvf monero-linux-armv8-${MONERO_VERSION}.tar.bz2 \
+    && cp monero-*/monerod /tmp/monerod
 
-RUN cmake --toolchain "contrib/depends/${TARGET}/share/toolchain.cmake" -S . -B build \
-        -DSTACK_TRACE=OFF \
-        -DBUILD_WALLET=OFF \
-        -DUSE_READLINE=OFF \
-        -DUSE_DEVICE_TREZOR=OFF \
-        -DSTATIC_FLAGS="-static-pie" && \
-    cmake --build build --target daemon --parallel $(nproc)
+FROM gcr.io/distroless/base-debian12:latest
 
-FROM scratch
+COPY --from=downloader /tmp/monerod /monerod
 
-COPY --from=builder /monero/build/bin/monerod /
-
-EXPOSE 18080
-EXPOSE 18081
+EXPOSE 18080 18081
 
 ENTRYPOINT ["/monerod"]
 CMD ["--p2p-bind-ip=0.0.0.0", "--p2p-bind-port=18080", "--rpc-bind-ip=0.0.0.0", "--rpc-bind-port=18081", "--non-interactive", "--confirm-external-bind"]
