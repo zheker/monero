@@ -50,7 +50,7 @@ jobs:
           context: .
           file: ./Dockerfile.arm64
           push: true
-          tags: ${{ id.meta.outputs.tags }}
-          labels: ${{ id.meta.outputs.labels }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             MONERO_VERSION=${{ github.event.inputs.monero_version }}
